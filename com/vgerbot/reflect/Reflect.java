@@ -497,6 +497,9 @@ public abstract class Reflect {
 		public Reflect callBy(Object receiver,Object...arguments) throws ReflectException{
 			return callBy(this, receiver, arguments);
 		}
+		public Reflect callBy(Object receiver) throws ReflectException{
+			return callBy(this,receiver,this.arguments);
+		}
 		
 		private Reflect call(Reflect from,Object...arguments) throws ReflectException{
 			return callBy(from, super.object, arguments);
@@ -724,6 +727,18 @@ public abstract class Reflect {
 			throw new ReflectException("method is null");
 		}
 		return new MethodReflect(nullReflect(),method,object);
+	}
+	public static MethodReflect on(Method method,Object...arguments){
+		if(method == null){
+			throw new ReflectException("method is null");
+		}
+		return new MethodReflect(nullReflect(), method, null, arguments);
+	}
+	public static MethodReflect on(Method method,Object object,Object...arguments){
+		if(method == null){
+			throw new ReflectException("method is null");
+		}
+		return new MethodReflect(nullReflect(), method, object, arguments);
 	}
 	public static MethodReflect on(Method method){
 		return on(method,null);
