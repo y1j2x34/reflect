@@ -90,9 +90,13 @@ Reflect.on(Person.class).create().method("say",String.class).call((Object)"你�
 ***
 ##参数绑定
 ### 1. 创建时绑定
+```
 Method sayMethod = Person.class.getDeclaredMethod("say",String.class);
 MethodReflect methodBindArgs = Reflect.on(sayMethod,new Object[]{"讲中文"});
 methodBindArgs.callBy(new Person);//output : 讲中文。
+```
 ### 2. 方法绑定：bind(Object...)
+```
 MethodReflect mr = Reflect.on(sayMethod);
 mr.bind("讲鸟语").callBy(new Person());//output: 讲鸟语
+```
