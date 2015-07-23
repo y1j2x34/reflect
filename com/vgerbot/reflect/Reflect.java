@@ -419,12 +419,13 @@ public abstract class Reflect {
 		public FieldReflect(Reflect from,Field member) {
 			super(from,member);
 		}
-		public void set(Object value) throws ReflectException{
+		public FieldReflect set(Object value) throws ReflectException{
 			try{
 				accessible(super.member).set(super.object, value);
 			}catch(Exception e){
 				throw new ReflectException(e);
 			}
+			return this;
 		}
 		public Reflect get(Object object) throws ReflectException{
 			return on(this,getValue(object));
@@ -470,6 +471,10 @@ public abstract class Reflect {
 				this.arguments = arguments;
 			}
 		}
+		public MethodReflect bind(Object...arguments){
+			this.arguments = arguments;
+			return this;
+		}
 		public Reflect call() throws ReflectException{
 			return callBy(super.object,arguments);
 		}
@@ -478,7 +483,13 @@ public abstract class Reflect {
 		}
 		private Reflect callBy(Reflect from,Object receiver,Object...arguments) throws ReflectException{
 			try{
-				return on(from,accessible(super.member).invoke(receiver, arguments));
+				Object returns = accessible(super.member).invoke(receiver, arguments);
+				if(returns == null){
+					return new NullReflect(from);
+				}
+				return on(from,returns);
+			}catch(ReflectException e){
+				throw e;
 			}catch(Exception e){
 				throw new ReflectException(e);
 			}
@@ -790,6 +801,20 @@ public abstract class Reflect {
 		Method method = method0(name,parameterTypes);
 		if(method== null) return null;
 		return new MethodReflect(this,method,unwrap());
+	}
+	public MethodReflect method(String name,Object...arguments) throws ReflectException{
+		Class<?>[] types = new Class[arguments.length];
+		for(int i=0;i<arguments.length;i++){
+			Object arg = arguments[i];
+			if(arg == null){
+				types[i] = NULL.class;
+			}else{
+				types[i] = arg.getClass();
+			}
+		}
+		Method method = method0(name,types);
+		if(method == null) return null;
+		return new MethodReflect(this,method,unwrap(),arguments);
 	}
 	/**
 	 * 获取字段
