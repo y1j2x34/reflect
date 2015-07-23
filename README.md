@@ -40,12 +40,12 @@ ObjectReflect or = Reflect.on(new Person());
 //包装字段
 Field f = Person.class.getDeclaredField("name");
 FieldReflect fr = Reflect.on(f);
-FieldReflect fr = Reflect.on(f,new Person("mario"));//绑定字段默认作用域
+FieldReflect fr = Reflect.on(f,new Person("mario"));//绑定字段默认作用对象
 //包装方法
 Method m = Person.class.getDeclaredMethod("say",String.class);
 MethodReflect mr = Reflect.on(m);
-MethodReflect mr = Reflect.on(m,new Person());//绑定方法默认作用域
-MethodReflect mr = Reflect.on(m,new Person(),new Object[]{"hello world"});//绑定方法默认作用域和参数
+MethodReflect mr = Reflect.on(m,new Person());//绑定方法默认作用对象
+MethodReflect mr = Reflect.on(m,new Person(),new Object[]{"hello world"});//绑定方法默认作用对象和参数
 //包装构造器
 Constructor<?> constr = Person.class.getDeclaredConstructor();
 ConstructorReflect cr = Reflect.on(constr);
