@@ -47,7 +47,7 @@ MethodReflect mr = Reflect.on(m);
 MethodReflect mr = Reflect.on(m,new Person());//绑定方法默认作用对象
 MethodReflect mr = Reflect.on(m,new Person(),new Object[]{"hello world"});//绑定方法默认作用对象和参数
 //包装构造器
-Constructor<?> constr = Person.class.getDeclaredConstructor();
+Constructor<?> constr = Person.class.getDeclaredConstructor(String.class,int.class);
 ConstructorReflect cr = Reflect.on(constr);
 ConstructorReflect cr = Reflect.on(constr,"john",26);//绑定默认构造参数
 //解包
