@@ -93,7 +93,7 @@ Reflect.on(Person.class).create().method("say",String.class).call((Object)"你�
 ```
 Method sayMethod = Person.class.getDeclaredMethod("say",String.class);
 MethodReflect methodBindArgs = Reflect.on(sayMethod,new Object[]{"讲中文"});
-methodBindArgs.callBy(new Person);//output : 讲中文。
+methodBindArgs.callBy(new Person());//output : 讲中文。
 ```
 ### 2. 方法绑定：bind(Object...)
 ```
@@ -102,5 +102,5 @@ mr.bind("讲鸟语").callBy(new Person("小明"));//output: 小明说：讲鸟�
 ```
 也可以这样
 ```
-Reflect.on(Person.class).method("say").bind("讲鸟语").callBy(new Person("小明"));
+Reflect.on(Person.class).method("say","讲鸟语").callBy(new Person("小明"));
 ```
