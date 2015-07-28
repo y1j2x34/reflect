@@ -100,3 +100,7 @@ methodBindArgs.callBy(new Person);//output : 讲中文。
 MethodReflect mr = Reflect.on(sayMethod);
 mr.bind("讲鸟语").callBy(new Person("小明"));//output: 小明说：讲鸟语
 ```
+也可以这样
+```
+Reflect.on(Person.class).method("say").bind("讲鸟语").callBy(new Person("小明"));
+```
