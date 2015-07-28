@@ -20,7 +20,7 @@ class Person{
 		return "Hello!My name is '"+name+"'";
 	}
 	void say(String something){
-		System.out.println(something);
+		System.out.println(name+"说："+something);
 	}
 	boolean wasDead(){
 		return age > 200; 
@@ -98,5 +98,5 @@ methodBindArgs.callBy(new Person);//output : 讲中文。
 ### 2. 方法绑定：bind(Object...)
 ```
 MethodReflect mr = Reflect.on(sayMethod);
-mr.bind("讲鸟语").callBy(new Person());//output: 讲鸟语
+mr.bind("讲鸟语").callBy(new Person("小明"));//output: 小明说：讲鸟语
 ```
