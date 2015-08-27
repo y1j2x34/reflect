@@ -25,6 +25,9 @@ class Person{
 	boolean wasDead(){
 		return age > 200; 
 	}
+	public String getName(){
+		return name;
+	}
 }
 ```
 ***
@@ -51,7 +54,7 @@ Constructor<?> constr = Person.class.getDeclaredConstructor(String.class,int.cla
 ConstructorReflect cr = Reflect.on(constr);
 ConstructorReflect cr = Reflect.on(constr,"john",26);//绑定默认构造参数
 //解包
-调用unwrap()方法即可
+调用off()方法即可
 ```
 ### 2. 创建实例
 
@@ -78,7 +81,7 @@ Map<String,FieldReflect> allFields = op.fields();
 //某个字段
 FieldReflect nameField = op.field("name");
 //字段值
-op.field("name").get().unwrap();//returns "data"
+op.field("name").get().off();//returns "data"
 //所有字段值
 Map<String,Reflect> values = op.fieldValues();
 ```
@@ -103,4 +106,20 @@ mr.bind("讲鸟语").callBy(new Person("小明"));//output: 小明说：讲鸟�
 也可以这样
 ```java
 Reflect.on(Person.class).method("say","讲鸟语").callBy(new Person("小明"));
+```
+##BatchReflect示例
+```java
+List<Person> persons = new ArrayList<Person>();
+for(int i=0;i<50;i++){
+	persons.add(new Person(""+i));
+}
+BatchReflect reflect = Reflect.on(persons.toArray());
+for(Reflect r:reflect.call("getName")){
+	System.out.println(r.off());
+}
+//output:
+//"1"
+//"2"
+//"3"
+//...
 ```
