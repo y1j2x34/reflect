@@ -1,5 +1,6 @@
 package com.vgerbot.reflect;
 
+import java.io.IOException;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
@@ -302,9 +303,10 @@ public abstract class Reflect {
 			super(from);
 			super.type = type;
 		}
+		@SuppressWarnings("unchecked")
 		@Override
-		public <T> T unwrap() {
-			return null;
+		public Class<?> off() {
+			return type;
 		}
 		@Override
 		public boolean isClass() {
@@ -326,7 +328,7 @@ public abstract class Reflect {
 		public boolean isFinal(){
 			return Modifier.isFinal(super.type.getModifiers());
 		}
-		public Reflect superclass(){
+		public ClassReflect superclass(){
 			return Reflect.on(super.type.getSuperclass());
 		}
 		public boolean isParentTypeOf(Class<?> type){
@@ -363,26 +365,35 @@ public abstract class Reflect {
 		public boolean isText(){
 			return isText(super.type);
 		}
+		
+		@Override
+		public ClassReflect release() {
+			super.release();
+			return this;
+		}
+		
 		public void simpleConvert(Object obj){
 			
 		}
 	}
 	public static class MemberReflect<M extends Member> extends Reflect{
 		private M member;
-		private Object object;
+		private Object receiver;
 		public MemberReflect(Reflect from,M member) {
 			this(from,member,null);
 		}
-		public MemberReflect(Reflect from,M member,Object object) {
+		public MemberReflect(Reflect from,M member,Object receiver) {
 			super(from);
 			this.member = member;
-			super.type = member.getClass();
-			this.object = object;
+			if(member != null){
+				super.type = member.getClass();
+			}
+			this.receiver = receiver;
 		}
 		@SuppressWarnings("unchecked")
 		@Override
-		public <T> T unwrap() {
-			return (T)member;
+		public M off() {
+			return member;
 		}
 		public boolean isStatic(){
 			return Modifier.isStatic(member.getModifiers());
@@ -409,6 +420,11 @@ public abstract class Reflect {
 		public ClassReflect declaring(){
 			return new ClassReflect(this,member.getDeclaringClass());
 		}
+		@Override
+		public MemberReflect<M> release() {
+			super.release();
+			return this;
+		}
 	}
 	public static class FieldReflect extends MemberReflect<Field>{
 
@@ -421,7 +437,7 @@ public abstract class Reflect {
 		}
 		public FieldReflect set(Object value) throws ReflectException{
 			try{
-				accessible(super.member).set(super.object, value);
+				accessible(super.member).set(super.receiver, value);
 			}catch(Exception e){
 				throw new ReflectException(e);
 			}
@@ -431,7 +447,7 @@ public abstract class Reflect {
 			return on(this,getValue(object));
 		}
 		public Reflect get() throws ReflectException{
-			return on(this,getValue(super.object));
+			return on(this,getValue(super.receiver));
 		}
 		@SuppressWarnings("unchecked")
 		public <T> T getValue(Object object) throws ReflectException{
@@ -442,7 +458,7 @@ public abstract class Reflect {
 			}
 		}
 		public <T> T getValue() throws ReflectException{
-			return getValue(super.object);
+			return getValue(super.receiver);
 		}
 		@Override
 		public boolean isField() {
@@ -454,6 +470,15 @@ public abstract class Reflect {
 		public boolean isVolatile(){
 			return Modifier.isVolatile(super.member.getModifiers());
 		}
+		@Override
+		public Field off() {
+			return super.off();
+		}
+		@Override
+		public FieldReflect release() {
+			super.release();
+			return this;
+		}
 	}
 	public static class MethodReflect extends MemberReflect<Method>{
 
@@ -461,12 +486,12 @@ public abstract class Reflect {
 			super(from,member);
 		}
 
-		public MethodReflect(Reflect from,Method member, Object object) {
-			super(from,member, object);
+		public MethodReflect(Reflect from,Method member, Object receiver) {
+			super(from,member, receiver);
 		}
 		private Object[] arguments = EMPTY_OBJECT_ARRAY;
-		public MethodReflect(Reflect from,Method member, Object object,Object[] arguments) {
-			super(from,member, object);
+		public MethodReflect(Reflect from,Method member, Object receiver,Object[] arguments) {
+			super(from,member, receiver);
 			if(arguments != null){
 				this.arguments = arguments;
 			}
@@ -476,10 +501,10 @@ public abstract class Reflect {
 			return this;
 		}
 		public Reflect call() throws ReflectException{
-			return callBy(super.object,arguments);
+			return callBy(super.receiver,arguments);
 		}
 		public Reflect call(Object...arguments) throws ReflectException{
-			return callBy(super.object,arguments);
+			return callBy(super.receiver,arguments);
 		}
 		private Reflect callBy(Reflect from,Object receiver,Object...arguments) throws ReflectException{
 			try{
@@ -502,7 +527,7 @@ public abstract class Reflect {
 		}
 		
 		private Reflect call(Reflect from,Object...arguments) throws ReflectException{
-			return callBy(from, super.object, arguments);
+			return callBy(from, super.receiver, arguments);
 		}
 		public int parameterSize(){
 			return arguments==null?0:arguments.length;
@@ -527,7 +552,124 @@ public abstract class Reflect {
 		public boolean isStrict(){
 			return Modifier.isStrict(super.member.getModifiers());
 		}
+		
+		@Override
+		public Method off() {
+			return super.off();
+		}
+		@Override
+		public MethodReflect release() {
+			super.release();
+			return this;
+		}
 	}
+	
+	public static class BatchMethodReflect extends MethodReflect implements Iterable<MethodReflect>{
+		private final MethodReflect[] reflects;
+		public BatchMethodReflect(Reflect from, MethodReflect[] reflects) {
+			this(from, reflects, null, EMPTY_OBJECT_ARRAY);
+		}
+		public BatchMethodReflect(Reflect from, MethodReflect[] reflects, Object[] arguments) {
+			this(from, reflects, null, arguments);
+		}
+		
+		public BatchMethodReflect(Reflect from, MethodReflect[] reflects, Object receiver,
+				Object[] arguments) {
+			super(from, null, receiver, arguments);
+			this.reflects = reflects;
+		}
+		public boolean isNative(){
+			boolean isNative = true;
+			for(MethodReflect reflect:reflects){
+				isNative &= reflect.isNative();
+			}
+			return isNative;
+		}
+		public boolean isSynchronized(){
+			boolean isSynchronized = true;
+			for(MethodReflect reflect:reflects){
+				isSynchronized &= reflect.isSynchronized();
+			}
+			return isSynchronized;
+		}
+		public boolean isAbstract(){
+			boolean isAbstract = true;
+			for(MethodReflect reflect:reflects){
+				isAbstract &= reflect.isAbstract();
+			}
+			return isAbstract;
+		}
+		public boolean isStrict(){
+			boolean isStrict = true;
+			for(MethodReflect reflect:reflects){
+				isStrict &= reflect.isStrict();
+			}
+			return isStrict;
+		}
+
+		@Override
+		public BatchReflect call() throws ReflectException {
+			Object[] returned = new Object[reflects.length];
+			Reflect[] returnedReflects = new Reflect[reflects.length];
+			for(int i = 0; i< reflects.length; i++){
+				MethodReflect reflect = reflects[i];
+				Reflect returnedReflect = reflect.call();
+				returned[i] = returnedReflect.off();
+				returnedReflects[i] = returnedReflect ;
+			}
+			return new BatchReflect(this, returned, returnedReflects);
+		}
+
+		@Override
+		public BatchReflect call(Object... arguments) throws ReflectException {
+			Object[] returned = new Object[reflects.length];
+			Reflect[] returnedReflects = new Reflect[reflects.length];
+			for(int i = 0; i< reflects.length; i++){
+				MethodReflect reflect = reflects[i];
+				Reflect returnedReflect = reflect.call(arguments);
+				returned[i] = returnedReflect.off();
+				returnedReflects[i] = returnedReflect ;
+			}
+			return new BatchReflect(this, returned, returnedReflects);
+		}
+
+		@Override
+		public BatchReflect callBy(Object receiver, Object... arguments)
+				throws ReflectException {
+			Object[] returned = new Object[reflects.length];
+			Reflect[] returnedReflects = new Reflect[reflects.length];
+			for(int i = 0; i< reflects.length; i++){
+				MethodReflect reflect = reflects[i];
+				Reflect returnedReflect = reflect.callBy(receiver, arguments);
+				returned[i] = returnedReflect.off();
+				returnedReflects[i] = returnedReflect ;
+			}
+			return new BatchReflect(this, returned, returnedReflects);
+		}
+
+		@Override
+		public BatchReflect callBy(Object receiver) throws ReflectException {
+			Object[] returned = new Object[reflects.length];
+			Reflect[] returnedReflects = new Reflect[reflects.length];
+			for(int i = 0; i< reflects.length; i++){
+				MethodReflect reflect = reflects[i];
+				Reflect returnedReflect = reflect.callBy(receiver);
+				returned[i] = returnedReflect.off();
+				returnedReflects[i] = returnedReflect ;
+			}
+			return new BatchReflect(this, returned, returnedReflects);
+		}
+		@Override
+		public Iterator<MethodReflect> iterator() {
+			return Arrays.asList(reflects).iterator();
+		}
+		@Override
+		public BatchMethodReflect release() {
+			super.release();
+			return this;
+		}
+	}
+	
 	public static class ConstructorReflect extends MemberReflect<Constructor<?>>{
 		public ConstructorReflect(Reflect from,Constructor<?> member) {
 			super(from,member);
@@ -562,6 +704,15 @@ public abstract class Reflect {
 		public boolean isConstructor() {
 			return true;
 		}
+		@Override
+		public Constructor<?> off() {
+			return super.off();
+		}
+		@Override
+		public ConstructorReflect release() {
+			super.release();
+			return this;
+		}
 	}
 	public static class ObjectReflect extends Reflect{
 		private Object object;
@@ -572,7 +723,7 @@ public abstract class Reflect {
 		}
 		@SuppressWarnings("unchecked")
 		@Override
-		public <T> T unwrap() {
+		public <T> T off() {
 			return (T)object;
 		}
 	}
@@ -609,8 +760,8 @@ public abstract class Reflect {
 		
 		@SuppressWarnings("unchecked")
 		@Override
-		public <T> T unwrap() {
-			return (T)map;
+		public Map<String,Object> off() {
+			return map;
 		}
 		
 	}
@@ -625,8 +776,159 @@ public abstract class Reflect {
 		}
 		@SuppressWarnings("unchecked")
 		@Override
-		public <T> T unwrap() {
+		public <T> T off() {
 			return (T) _null;
+		}
+	}
+	
+	public static class BatchReflect extends Reflect implements Iterable<Reflect>{
+		private final Object[] origin;
+		private final Reflect[] reflects;
+		public BatchReflect(Reflect from,Object[] origin,Reflect...reflects) {
+			super(from);
+			this.origin = origin;
+			this.reflects = reflects;
+		}
+		
+		@Override
+		public boolean isClass() {
+			return false;
+		}
+
+		@Override
+		public boolean isField() {
+			return false;
+		}
+
+		@Override
+		public boolean isMethod() {
+			return false;
+		}
+
+		@Override
+		public boolean isConstructor() {
+			return false;
+		}
+
+		@Override
+		public boolean isMap() {
+			return false;
+		}
+
+		@Override
+		public boolean isNull() {
+			return false;
+		}
+
+		@Override
+		public BatchMethodReflect method(String name) throws ReflectException {
+			MethodReflect[] reflects = new MethodReflect[origin.length];
+			for(int i=0;i<origin.length;i++){
+				MethodReflect reflect = Reflect.on(origin[i]).method(name);
+				reflects[i] = reflect;
+			}
+			return new BatchMethodReflect(this,reflects);
+		}
+
+		@Override
+		public BatchMethodReflect method(String name, Class<?>... parameterTypes)
+				throws ReflectException {
+			MethodReflect[] reflects = new MethodReflect[origin.length];
+			for(int i=0;i<origin.length;i++){
+				MethodReflect reflect = Reflect.on(origin[i]).method(name, parameterTypes);
+				reflects[i] = reflect;
+			}
+			return new BatchMethodReflect(this,reflects);
+		}
+
+		@Override
+		public BatchMethodReflect method(String name, Object... arguments)
+				throws ReflectException {
+			MethodReflect[] reflects = new MethodReflect[origin.length];
+			for(int i=0;i<origin.length;i++){
+				MethodReflect reflect = Reflect.on(origin[i]).method(name, arguments);
+				reflects[i] = reflect;
+			}
+			return new BatchMethodReflect(this,reflects,arguments);
+		}
+
+		@Override
+		public FieldReflect field(String name) throws ReflectException {
+			return super.field(name);
+		}
+
+		@Override
+		public Map<String, FieldReflect> fields() {
+			return super.fields();
+		}
+
+		@Override
+		public Map<String, Reflect> fieldValues() {
+			return super.fieldValues();
+		}
+
+		@Override
+		public Reflect callBy(Object receiver, String name, Object... arguments)
+				throws ReflectException {
+			Object[] returnds = new Object[reflects.length];
+			Reflect[] returnedReflects = new Reflect[reflects.length];
+			for(int i = 0; i < reflects.length ; i++){
+				Reflect reflect = reflects[i].callBy(receiver,name,arguments);
+				returnedReflects[i] = reflect;
+				returnds[i] = reflect.off();
+			}
+			return new BatchReflect(this, returnds, returnedReflects);
+		}
+
+		@Override
+		public BatchReflect call(String name) throws ReflectException {
+			return this.call(name,EMPTY_OBJECT_ARRAY);
+		}
+
+		@Override
+		public BatchReflect call(String name, Object... arguments)
+				throws ReflectException {
+			Object[] returnds = new Object[reflects.length];
+			Reflect[] returnedReflects = new Reflect[reflects.length];
+			for(int i = 0; i < reflects.length ; i++){
+				Reflect reflect = reflects[i].call(name,arguments);
+				returnedReflects[i] = reflect;
+				returnds[i] = reflect.off();
+			}
+			return new BatchReflect(this, returnds, returnedReflects);
+		}
+
+		@Override
+		public BatchReflect create() throws ReflectException {
+			return this.create(EMPTY_OBJECT_ARRAY);
+		}
+
+		@Override
+		public BatchReflect create(Object... arguments) throws ReflectException {
+			Object[] createds = new Object[reflects.length];
+			Reflect[] createdReflects = new Reflect[reflects.length];
+			for(int i = 0; i < reflects.length ; i++){
+				Reflect reflect = reflects[i].create(arguments);
+				createdReflects[i] = reflect;
+				createds[i] = reflect.off();
+			}
+			return new BatchReflect(this, createds, createdReflects);
+		}
+		
+		@Override
+		public String toString() {
+			return Arrays.toString(origin);
+		}
+
+		@SuppressWarnings("unchecked")
+		@Override
+		public Object[] off() {
+			return origin;
+		}
+		
+		@Override
+		public Iterator<Reflect> iterator() {
+			return Arrays.asList(reflects).iterator();
 		}
 	}
 	
@@ -647,42 +949,49 @@ public abstract class Reflect {
 			urls = emptyURLArray;
 		}
 		URLClassLoader uloader = new URLClassLoader(urls);
-		
-		Class<?> type = null;
-		if(!( imports == null || imports.isEmpty())){
-			StringBuilder cname = new StringBuilder();
-			Iterator<String> it = imports.iterator();
-			while(type == null && it.hasNext()){
-				String imp=it.next();
-				if(imp.endsWith("*")){
-					cname.append(imp.substring(0, imp.length()-1)).append(simpleName);
-				}else if(imp.endsWith(simpleName)){
+		try{
+			Class<?> type = null;
+			if(imports != null && !imports.isEmpty()){
+				StringBuilder cname = new StringBuilder();
+				Iterator<String> it = imports.iterator();
+				while(type == null && it.hasNext()){
+					String imp=it.next();
+					if(imp.endsWith("*")){
+						cname.append(imp.substring(0, imp.length()-1)).append(simpleName);
+					}else if(imp.endsWith(simpleName)){
+						cname.setLength(0);
+						cname.append(imp);
+					}else{
+						cname.append(imp).append('.').append(simpleName);
+					}
+					try {
+						type = uloader.loadClass(cname.toString());
+					} catch (ClassNotFoundException e) {}
 					cname.setLength(0);
-					cname.append(imp);
-				}else{
-					cname.append(imp).append('.').append(simpleName);
 				}
+			}
+			if(type == null){
 				try {
-					type = uloader.loadClass(cname.toString());
+					type = uloader.loadClass(simpleName);
 				} catch (ClassNotFoundException e) {}
-				cname.setLength(0);
+			}
+			if(type == null){
+				try {
+					type = Class.forName(simpleName);
+				} catch (ClassNotFoundException e) {
+				}
+			}
+			if(type == null){
+				throw new ReflectException("Class not found:"+simpleName);
+			}
+			return Reflect.on(type);
+		}finally{
+			try {
+				uloader.close();
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
 		}
-		if(type == null){
-			try {
-				type = uloader.loadClass(simpleName);
-			} catch (ClassNotFoundException e) {}
-		}
-		if(type == null){
-			try {
-				type = Class.forName(simpleName);
-			} catch (ClassNotFoundException e) {
-			}
-		}
-		if(type == null){
-			throw new ReflectException("Class not found:"+simpleName);
-		}
-		return Reflect.on(type);
 	}
 	
 	private static ObjectReflect on(Reflect from,Object object) throws ReflectException{
@@ -694,6 +1003,22 @@ public abstract class Reflect {
 	public static ObjectReflect on(Object object) throws ReflectException{
 		return on(nullReflect(),object);
 	}
+	
+	public static BatchReflect on(Object[] objects) throws ReflectException{
+		return on(nullReflect(),objects);
+	}
+	
+	public static BatchReflect on(Reflect from,Object[] objects) throws ReflectException{
+		if(objects == null || objects.length < 1){
+			return new BatchReflect(nullReflect(),objects);
+		}
+		Reflect[] reflects = new Reflect[objects.length];
+		for(int i=0;i<objects.length;i++){
+			reflects[i] = auto(objects[i]);
+		}
+		return new BatchReflect(from,objects,reflects);
+	}
+	
 	public static ClassReflect on(String name) throws ReflectException{
 		if(name == null || name.length() < 1)
 			throw new ReflectException("no characters!");
@@ -741,7 +1066,7 @@ public abstract class Reflect {
 		return new MethodReflect(nullReflect(), method, object, arguments);
 	}
 	public static MethodReflect on(Method method){
-		return on(method,null);
+		return on(method,EMPTY_OBJECT_ARRAY);
 	}
 	public static ConstructorReflect on(Constructor<?> constructor,Object...arguments){
 		if(constructor == null){
@@ -751,6 +1076,21 @@ public abstract class Reflect {
 	}
 	public static ConstructorReflect on(Constructor<?> constructor){
 		return on(constructor,EMPTY_OBJECT_ARRAY);
+	}
+	
+	/**
+	 * @param object
+	 * @return
+	 */
+	public static Reflect auto(Object object){
+		if(object == null){
+			return nullReflect();
+		}
+		try{
+			return Reflect.on(Reflect.class).method("on",object.getClass()).call(object).release().off();
+		}catch(Exception e){
+			return Reflect.on(object);
+		}
 	}
 	
 	protected Class<?> type;
@@ -780,7 +1120,7 @@ public abstract class Reflect {
 		return false;
 	}
 	public ObjectReflect asObject(){
-		return new ObjectReflect(from, unwrap());
+		return new ObjectReflect(from, off());
 	}
 	/**
 	 * 获取被包装的对象
@@ -789,7 +1129,7 @@ public abstract class Reflect {
 	 * @date 2015-3-30
 	 * @return
 	 */
-	public abstract <T> T unwrap();
+	public abstract <T> T off();
 	
 	public final Class<?> type(){
 		return type;
@@ -815,7 +1155,7 @@ public abstract class Reflect {
 	public MethodReflect method(String name,Class<?>...parameterTypes) throws ReflectException{
 		Method method = method0(name,parameterTypes);
 		if(method== null) return null;
-		return new MethodReflect(this,method,unwrap());
+		return new MethodReflect(this,method,off());
 	}
 	public MethodReflect method(String name,Object...arguments) throws ReflectException{
 		Class<?>[] types = new Class[arguments.length];
@@ -829,7 +1169,7 @@ public abstract class Reflect {
 		}
 		Method method = method0(name,types);
 		if(method == null) return null;
-		return new MethodReflect(this,method,unwrap(),arguments);
+		return new MethodReflect(this,method,off(),arguments);
 	}
 	/**
 	 * 获取字段
@@ -841,7 +1181,7 @@ public abstract class Reflect {
 	 * @throws ReflectException
 	 */
 	public FieldReflect field(String name) throws ReflectException{
-		return new FieldReflect(this,field0(name),unwrap());
+		return new FieldReflect(this,field0(name),off());
 	}
 	private Field field0(String name) throws ReflectException{
 		Class<?> type = type();
@@ -968,11 +1308,11 @@ public abstract class Reflect {
 		Class<?>[] types = types(arguments);
 		try{
 			Method method = type().getMethod(name, types);
-			return new MethodReflect(this,method, unwrap()).call(this,arguments);
+			return new MethodReflect(this,method, off()).call(this,arguments);
 		}catch(NoSuchMethodException e){
 			try{
 				Method method = similarMethod(name, types);
-				return new MethodReflect(this,method, unwrap()).call(this,arguments);
+				return new MethodReflect(this,method, off()).call(this,arguments);
 			}catch(NoSuchMethodException e1){
 				throw new ReflectException(e1);
 			}
@@ -1022,6 +1362,14 @@ public abstract class Reflect {
 		return from;
 	}
 	/**
+	 * 从链条中释放,释放后该Reflect不再持有链式调用的上一个节点引用，即 back() 方法返回 NullReflect
+	 * @return
+	 */
+	public Reflect release(){
+		from = nullReflect();
+		return this;
+	}
+	/**
 	 * 判断是否等价
 	 * @author y1j2x34
 	 * @date 2015年3月31日
@@ -1029,11 +1377,11 @@ public abstract class Reflect {
 	 * @return
 	 */
 	public boolean is(Reflect other){
-		return other != null && this == other || other.unwrap() == this.unwrap();
+		return other != null && this == other || other.off() == this.off();
 	}
 	
 	@Override
 	public String toString() {
-		return String.valueOf(unwrap());
+		return String.valueOf(off());
 	}
 }
