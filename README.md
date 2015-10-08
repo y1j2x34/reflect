@@ -139,9 +139,10 @@ public enum Sex{
 	}
 }
 ```
+```java
 Reflect.onEnum(Sex.class).add("ALIEN","无");
 Reflect.onEnum(Sex.class).add("OTHER");
 
 Sex alien = Sex.valueOf("ALIEN");
 Sex other = Sex.valueOf("OTHER");
-
+```
