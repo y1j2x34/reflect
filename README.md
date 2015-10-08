@@ -123,3 +123,25 @@ for(Reflect r:reflect.call("getName")){
 //"3"
 //...
 ```
+***  
+##EnumReflect
+动态创建枚举
+```java
+public enum Sex{
+	BOY("男"),GIRL("女")
+	;
+	final String displayName;
+	Type(String displayName){
+		this.displayName = displayName;
+	}
+	Type(){
+		this("人妖");
+	}
+}
+```
+Reflect.onEnum(Sex.class).add("ALIEN","无");
+Reflect.onEnum(Sex.class).add("OTHER");
+
+Sex alien = Sex.valueOf("ALIEN");
+Sex other = Sex.valueOf("OTHER");
+
