@@ -1,7 +1,9 @@
 package com.vgerbot.reflect;
 
 import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.AccessibleObject;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -10,12 +12,18 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import sun.reflect.ConstructorAccessor;
+import sun.reflect.FieldAccessor;
+import sun.reflect.ReflectionFactory;
+
+@SuppressWarnings("restriction")
 public abstract class Reflect {
 	private static final URL[] 	emptyURLArray = new URL[]{};
 	private static final Map<String,Class<?>> PRIMTYPEMAPPING = new HashMap<String,Class<?>>();
@@ -164,6 +172,17 @@ public abstract class Reflect {
 		}
 		return accessible;
 	}
+	private static ReflectionFactory reflectionFactory = ReflectionFactory.getReflectionFactory();
+	
+	public static Field breakFinal(Field field) throws IllegalAccessException, NoSuchFieldException{
+		field.setAccessible(true);
+		Field modifiersField = Field.class.getDeclaredField("modifiers");
+		modifiersField.setAccessible(true);
+		int modifiers = modifiersField.getInt(field);
+		modifiers &= ~Modifier.FINAL;
+		modifiersField.setInt(field, modifiers);
+		return field;
+	}
 	//----------------------------------------------------------------
 	//内部工具方法
 	//----------------------------------------------------------------
@@ -270,7 +289,7 @@ public abstract class Reflect {
 	 * @param actualTypes
 	 * @return
 	 */
-	private boolean match(Class<?>[] declaredTypes, Class<?>[] actualTypes) {
+	private static boolean match(Class<?>[] declaredTypes, Class<?>[] actualTypes) {
         if (declaredTypes.length == actualTypes.length) {
             for (int i = 0; i < actualTypes.length; i++) {
                 if (actualTypes[i] == NULL.class)
@@ -298,12 +317,52 @@ public abstract class Reflect {
 	private static final Object[] EMPTY_OBJECT_ARRAY = new Object[0];
 	private static final Class<?>[] EMPTY_CLASS_ARRAY = new Class[0];
 	
-	public static class ClassReflect extends Reflect{
-		public ClassReflect(Reflect from,Class<?> type) {
+	public static class AnnotatedReflect<A extends AnnotatedElement> extends Reflect{
+		protected A value;
+		public AnnotatedReflect(Reflect from,A value) {
 			super(from);
+			this.value = value;
+		}
+
+		@SuppressWarnings("unchecked")
+		@Override
+		public A off() {
+			return value;
+		}
+		public <T extends Annotation> T getAnotation(Class<T> annotationClass){
+			return type.getAnnotation(annotationClass);
+		}
+		
+		public <T extends Annotation> List<T> getAnnotations(Class<T> annotationClass){
+			T[] annos = type.getAnnotationsByType(annotationClass);
+			if(annos == null || annos.length < 1){
+				return new ArrayList<T>(0); 
+			}
+			return Arrays.asList(annos);
+		}
+		public List<Annotation> getDeclaredAnnotations(){
+			Annotation[] annos = type.getDeclaredAnnotations();
+			if(annos == null || annos.length < 1){
+				return new ArrayList<Annotation>(0); 
+			}
+			return Arrays.asList(annos);
+		}
+		
+		public List<Annotation> getAnnotations(){
+			Annotation[] annos = type.getAnnotations();
+			if(annos == null || annos.length < 1){
+				return new ArrayList<Annotation>(0); 
+			}
+			return Arrays.asList(annos);
+		}
+	}
+	
+	public static class ClassReflect extends AnnotatedReflect<Class<?>>{
+		public ClassReflect(Reflect from,Class<?> type) {
+			super(from,type);
 			super.type = type;
 		}
-		@SuppressWarnings("unchecked")
+		
 		@Override
 		public Class<?> off() {
 			return type;
@@ -371,44 +430,40 @@ public abstract class Reflect {
 			super.release();
 			return this;
 		}
-		
-		public void simpleConvert(Object obj){
-			
-		}
 	}
-	public static class MemberReflect<M extends Member> extends Reflect{
-		private M member;
+	public static class MemberReflect<M extends Member&AnnotatedElement> extends AnnotatedReflect<M>{
+//		private M member;
 		private Object receiver;
 		public MemberReflect(Reflect from,M member) {
 			this(from,member,null);
 		}
 		public MemberReflect(Reflect from,M member,Object receiver) {
-			super(from);
-			this.member = member;
+			super(from,member);
+//			this.member = member;
 			if(member != null){
 				super.type = member.getClass();
 			}
 			this.receiver = receiver;
 		}
-		@SuppressWarnings("unchecked")
+		
 		@Override
 		public M off() {
-			return member;
+			return super.off();
 		}
 		public boolean isStatic(){
-			return Modifier.isStatic(member.getModifiers());
+			return Modifier.isStatic(off().getModifiers());
 		}
 		public boolean isPublic(){
-			return Modifier.isPublic(member.getModifiers());
+			return Modifier.isPublic(off().getModifiers());
 		}
 		public boolean isPrivate(){
-			return Modifier.isPrivate(member.getModifiers());
+			return Modifier.isPrivate(off().getModifiers());
 		}
 		public boolean isProtected(){
-			return Modifier.isProtected(member.getModifiers());
+			return Modifier.isProtected(off().getModifiers());
 		}
 		public boolean isFinal(){
-			return Modifier.isFinal(member.getModifiers());
+			return Modifier.isFinal(off().getModifiers());
 		}
 		/**
 		 * 取得定义该成员的类
@@ -418,7 +473,7 @@ public abstract class Reflect {
 		 * @return
 		 */
 		public ClassReflect declaring(){
-			return new ClassReflect(this,member.getDeclaringClass());
+			return new ClassReflect(this,off().getDeclaringClass());
 		}
 		@Override
 		public MemberReflect<M> release() {
@@ -428,6 +483,8 @@ public abstract class Reflect {
 	}
 	public static class FieldReflect extends MemberReflect<Field>{
 
+		private FieldAccessor fieldAccessor;
+		
 		public FieldReflect(Reflect from,Field member, Object object) {
 			super(from,member, object);
 		}
@@ -435,9 +492,17 @@ public abstract class Reflect {
 		public FieldReflect(Reflect from,Field member) {
 			super(from,member);
 		}
-		public FieldReflect set(Object value) throws ReflectException{
+		public FieldReflect set(Object value,boolean force) throws ReflectException{
 			try{
-				accessible(super.member).set(super.receiver, value);
+				if(!force){
+					super.value.set(super.receiver, value);
+				}else{
+					if(fieldAccessor == null){
+						Field field = breakFinal(super.value);
+						fieldAccessor = reflectionFactory.newFieldAccessor(field, false);
+					}
+					fieldAccessor.set(super.receiver, value);
+				}
 			}catch(Exception e){
 				throw new ReflectException(e);
 			}
@@ -452,7 +517,7 @@ public abstract class Reflect {
 		@SuppressWarnings("unchecked")
 		public <T> T getValue(Object object) throws ReflectException{
 			try{
-				return (T)(accessible(super.member).get(object));
+				return (T)(accessible(super.off()).get(object));
 			}catch(Exception e){
 				throw new ReflectException(e);
 			}
@@ -465,10 +530,21 @@ public abstract class Reflect {
 			return true;
 		}
 		public boolean isTransient(){
-			return Modifier.isTransient(super.member.getModifiers());
+			return Modifier.isTransient(super.off().getModifiers());
 		}
 		public boolean isVolatile(){
-			return Modifier.isVolatile(super.member.getModifiers());
+			return Modifier.isVolatile(super.off().getModifiers());
+		}
+		public FieldReflect noFinal(){
+			if(!isFinal()){
+				return this;
+			}
+			try {
+				breakFinal(super.value);
+			} catch (IllegalAccessException e) {
+			} catch (NoSuchFieldException e) {
+			}
+			return this;
 		}
 		@Override
 		public Field off() {
@@ -508,7 +584,7 @@ public abstract class Reflect {
 		}
 		private Reflect callBy(Reflect from,Object receiver,Object...arguments) throws ReflectException{
 			try{
-				Object returns = accessible(super.member).invoke(receiver, arguments);
+				Object returns = accessible(super.off()).invoke(receiver, arguments);
 				if(returns == null){
 					return new NullReflect(from);
 				}
@@ -533,7 +609,7 @@ public abstract class Reflect {
 			return arguments==null?0:arguments.length;
 		}
 		public ClassReflect parameterTypeAt(int index){
-			Class<?>[] types = super.member.getParameterTypes();
+			Class<?>[] types = super.off().getParameterTypes();
 			return types.length==0?null:new ClassReflect(this,types[index]);
 		}
 		@Override
@@ -541,16 +617,16 @@ public abstract class Reflect {
 			return true;
 		}
 		public boolean isNative(){
-			return Modifier.isNative(super.member.getModifiers());
+			return Modifier.isNative(super.off().getModifiers());
 		}
 		public boolean isSynchronized(){
-			return Modifier.isSynchronized(super.member.getModifiers());
+			return Modifier.isSynchronized(super.off().getModifiers());
 		}
 		public boolean isAbstract(){
-			return Modifier.isAbstract(super.member.getModifiers());
+			return Modifier.isAbstract(super.off().getModifiers());
 		}
 		public boolean isStrict(){
-			return Modifier.isStrict(super.member.getModifiers());
+			return Modifier.isStrict(super.off().getModifiers());
 		}
 		
 		@Override
@@ -668,6 +744,38 @@ public abstract class Reflect {
 			super.release();
 			return this;
 		}
+		@Override
+		public List<Annotation> getAnnotations() {
+			List<Annotation> annotations = new ArrayList<Annotation>();
+			for(int i = 0; i< reflects.length; i++){
+				MethodReflect reflect = reflects[i];
+				annotations.addAll(reflect.getAnnotations());
+			}
+			return annotations;
+		}
+		@Override
+		public <T extends Annotation> List<T> getAnnotations(Class<T> annotationClass) {
+			List<T> annotations = new ArrayList<T>();
+			for(int i = 0; i< reflects.length; i++){
+				MethodReflect reflect = reflects[i];
+				annotations.addAll(reflect.getAnnotations(annotationClass));
+			}
+			return annotations;
+		}
+		@Override
+		public <T extends Annotation> T getAnotation(Class<T> annotationClass) {
+			throw new UnsupportedOperationException();
+		}
+		
+		@Override
+		public List<Annotation> getDeclaredAnnotations() {
+			List<Annotation> annotations = new ArrayList<Annotation>();
+			for(int i = 0; i< reflects.length; i++){
+				MethodReflect reflect = reflects[i];
+				annotations.addAll(reflect.getDeclaredAnnotations());
+			}
+			return annotations;
+		}
 	}
 	
 	public static class ConstructorReflect extends MemberReflect<Constructor<?>>{
@@ -688,14 +796,14 @@ public abstract class Reflect {
 		
 		private Reflect create(Reflect from,Object...arguments) throws ReflectException{
 			try{
-				return on(from,accessible(super.member).newInstance(arguments));
+				return on(from,accessible(super.off()).newInstance(arguments));
 			}catch(Exception e){
 				throw new ReflectException(e);
 			}
 		}
 		public Reflect create(Object...arguments) throws ReflectException{
 			try{
-				return on(this,accessible(super.member).newInstance(arguments));
+				return on(this,accessible(super.off()).newInstance(arguments));
 			}catch(Exception e){
 				throw new ReflectException(e);
 			}
@@ -733,6 +841,7 @@ public abstract class Reflect {
 		public MapReflect(Reflect from,Map<String,Object> map) {
 			super(from);
 			this.map = map;
+			super.type = map.getClass();
 		}
 		
 		@Override
@@ -932,9 +1041,161 @@ public abstract class Reflect {
 		}
 	}
 	
+	public static class EnumReflect<T extends Enum<T>> extends Reflect{
+		private final Class<T> enumType;
+		Field valuesField = null;
+		public EnumReflect(Class<T> enumType) {
+			super(nullReflect());
+			this.enumType = enumType;
+			for(Field field: enumType.getDeclaredFields()){
+				if(field.getName().contains("$VALUES")){
+					valuesField = field;
+					break;
+				}
+			}
+			accessible(valuesField);
+			try {
+				breakFinal(valuesField);
+			}catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		/**
+		 * 是否包含指定名称的枚举
+		 * @param name
+		 * @return
+		 * @throws NullPointerException if name is null
+		 */
+		public boolean contains(String name){
+			try{
+				return Enum.valueOf(enumType, name) != null;
+			}catch(IllegalArgumentException e){
+				return false;
+			}
+		}
+		
+		public T valueOf(String name){
+			if(name == null || name.length() < 1){
+				return null;
+			}
+			return Enum.valueOf(enumType, name);
+		}
+		
+		/**
+		 * 添加枚举
+		 * @param name
+		 * @param arguments
+		 * @return
+		 */
+		@SuppressWarnings({ "unchecked" })
+		public T add(String name,Object... arguments){
+			try{
+				return valueOf(name);
+			}catch(IllegalArgumentException ex){}
+			
+			try{
+				T[] values = (T[]) valuesField.get(enumType);
+				
+				T newEnum = makeEnum(arguments, name, values.length);
+				
+				T[] newValues = (T[]) Array.newInstance(enumType, values.length+1);
+				newValues[values.length] = newEnum;
+				
+				System.arraycopy(values, 0, newValues, 0, values.length);
+				
+				FieldAccessor fa = reflectionFactory.newFieldAccessor(valuesField, false);
+				fa.set(null, newValues);
+				
+				//enumConstantDirectory
+				Field directField = similarField(Class.class, "enumConstantDirectory");
+				if(directField != null){
+					breakFinal(directField);
+					FieldAccessor directFA = reflectionFactory.newFieldAccessor(directField, false);
+					Map<String,T> direct = (Map<String, T>) directFA.get(enumType);
+					direct.put(name, newEnum);
+				}
+				//enumConstants
+				Field constantsField = similarField(Class.class, "enumConstants");
+				if(constantsField != null){
+					breakFinal(constantsField);
+					FieldAccessor constantsFA = reflectionFactory.newFieldAccessor(constantsField, false);
+					constantsFA.set(enumType, newValues);
+				}
+				
+				return newEnum;
+			}catch(ReflectException ex){
+				throw ex;
+			}catch(Exception ex){
+				throw new ReflectException("add enum failed", ex);
+			}
+		}
+		
+		private T makeEnum(Object[] arguments,String name,int odinal) throws Exception{
+			Constructor<T> constr = getConstructor(enumType, arguments);
+			if(constr == null){
+				throw new ReflectException("constructor not found:"+enumType.getName()+"."+enumType.getSimpleName()+"("+typeName(arguments)+")");
+			}
+			constr.setAccessible(true);
+			Object[] args = new Object[arguments.length+2];
+			args[0] = name;
+			args[1] = odinal;
+			System.arraycopy(arguments, 0, args, 2, arguments.length);
+			ConstructorAccessor accessor = reflectionFactory.newConstructorAccessor(constr);
+			return enumType.cast(accessor.newInstance(args));
+		}
+		private static String typeName( Object[] arguments ) {
+			StringBuilder sb = new StringBuilder();
+			for(int i=0;i<arguments.length;i++){
+				if(arguments[i] == null){
+					sb.append("null");
+				}else{
+					sb.append(arguments[i].getClass().getName()).append(',');
+				}
+			}
+			if(sb.length() > 0){
+				sb.deleteCharAt(sb.length()-1);
+			}
+			return sb.toString();
+		}
+		private static Field similarField(Class<?> on,String name){
+			for(Field field:on.getDeclaredFields()){
+				if(field.getName().contains(name)){
+					return field;
+				}
+			}
+			return null;
+		}
+		
+		@SuppressWarnings("unchecked")
+		private static <T> Constructor<T> getConstructor(Class<T> type,Object... arguments){
+			Constructor<?>[] constrs = type.getDeclaredConstructors();
+			if(constrs.length == 1){
+				return (Constructor<T>)constrs[0];
+			}
+			Class<?>[] types = types(arguments);
+			Class<?>[] realTypes = new Class<?>[types.length+2];
+			realTypes[0] = String.class;
+			realTypes[1] = int.class;
+			System.arraycopy(types, 0, realTypes, 2, types.length);
+			for(int i=0;i<constrs.length;i++){
+				if(match(constrs[i].getParameterTypes(),realTypes)){
+					return (Constructor<T>) constrs[i];
+				}
+			}
+			return null;
+		}
+		
+		@SuppressWarnings("unchecked")
+		@Override
+		public Class<T> off() {
+			return enumType;
+		}
+		
+	}
+	
 	private static class NULL{}
 	
-	public static final ClassReflect find(List<String> imports,String simpleName, URL[] urls) throws ReflectException{
+	public static final ClassReflect find(List<String> importPackages,String simpleName, URL[] urls) throws ReflectException{
 		if(simpleName == null){
 			return Reflect.on(Object.class);
 		}
@@ -951,9 +1212,9 @@ public abstract class Reflect {
 		URLClassLoader uloader = new URLClassLoader(urls);
 		try{
 			Class<?> type = null;
-			if(imports != null && !imports.isEmpty()){
+			if(importPackages != null && !importPackages.isEmpty()){
 				StringBuilder cname = new StringBuilder();
-				Iterator<String> it = imports.iterator();
+				Iterator<String> it = importPackages.iterator();
 				while(type == null && it.hasNext()){
 					String imp=it.next();
 					if(imp.endsWith("*")){
@@ -1038,6 +1299,12 @@ public abstract class Reflect {
 		}
 		return new ClassReflect(nullReflect(),clazz);
 	}
+	public static <T extends Enum<T>> EnumReflect<T> onEnum(Class<T> enumType) throws ReflectException{
+		if(enumType == null){
+			throw new ReflectException("enum type == null");
+		}
+		return new EnumReflect<T>(enumType);
+	}
 	public static FieldReflect on(Field field) throws ReflectException{
 		return on(field,null);
 	}
@@ -1082,9 +1349,13 @@ public abstract class Reflect {
 	 * @param object
 	 * @return
 	 */
+	@SuppressWarnings({ "rawtypes" })
 	public static Reflect auto(Object object){
 		if(object == null){
 			return nullReflect();
+		}
+		if(object instanceof Class<?> && ((Class) object).isEnum()){
+			return Reflect.on(Reflect.class).method("onEnum",object.getClass()).call(object).release().off();
 		}
 		try{
 			return Reflect.on(Reflect.class).method("on",object.getClass()).call(object).release().off();
@@ -1362,7 +1633,7 @@ public abstract class Reflect {
 		return from;
 	}
 	/**
-	 * 从链条中释放,释放后该Reflect不再持有链式调用的上一个节点引用，即 back() 方法返回 NullReflect
+	 * 从链条中释放,释放后该Reflect不再持有链式调用的上一个节点引用，back() 方法将返回 NullReflect
 	 * @return
 	 */
 	public Reflect release(){
