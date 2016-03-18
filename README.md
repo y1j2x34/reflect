@@ -53,8 +53,9 @@ MethodReflect mr = Reflect.on(m,new Person(),new Object[]{"hello world"});//绑�
 Constructor<?> constr = Person.class.getDeclaredConstructor(String.class,int.class);
 ConstructorReflect cr = Reflect.on(constr);
 ConstructorReflect cr = Reflect.on(constr,"john",26);//绑定默认构造参数
-//解包
-调用off()方法即可
+// off() 获取被包装的对象
+// cr.off() == constr; //==> true
+
 ```
 ### 2. 创建实例
 
