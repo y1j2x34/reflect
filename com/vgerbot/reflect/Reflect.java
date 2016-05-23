@@ -148,7 +148,7 @@ public abstract class Reflect {
 				return void.class;
 			}
 		}
-		return wrapper;
+		return null;
 	}
 	
 	/**
@@ -329,19 +329,20 @@ public abstract class Reflect {
 		public A off() {
 			return value;
 		}
-		public <T extends Annotation> T getAnotation(Class<T> annotationClass){
-			return type.getAnnotation(annotationClass);
+		
+		public <T extends Annotation> T getAnnotation(Class<T> annotationClass){
+			return value.getAnnotation(annotationClass);
 		}
 		
 		public <T extends Annotation> List<T> getAnnotations(Class<T> annotationClass){
-			T[] annos = type.getAnnotationsByType(annotationClass);
+			T[] annos = value.getAnnotationsByType(annotationClass);
 			if(annos == null || annos.length < 1){
 				return new ArrayList<T>(0); 
 			}
 			return Arrays.asList(annos);
 		}
 		public List<Annotation> getDeclaredAnnotations(){
-			Annotation[] annos = type.getDeclaredAnnotations();
+			Annotation[] annos = value.getDeclaredAnnotations();
 			if(annos == null || annos.length < 1){
 				return new ArrayList<Annotation>(0); 
 			}
@@ -349,7 +350,7 @@ public abstract class Reflect {
 		}
 		
 		public List<Annotation> getAnnotations(){
-			Annotation[] annos = type.getAnnotations();
+			Annotation[] annos = value.getAnnotations();
 			if(annos == null || annos.length < 1){
 				return new ArrayList<Annotation>(0); 
 			}
@@ -430,6 +431,9 @@ public abstract class Reflect {
 			super.release();
 			return this;
 		}
+		public void simpleConvert(Object obj){
+			
+		}
 	}
 	public static class MemberReflect<M extends Member&AnnotatedElement> extends AnnotatedReflect<M>{
 //		private M member;
@@ -480,6 +484,9 @@ public abstract class Reflect {
 			super.release();
 			return this;
 		}
+		public Object getReceiver() {
+			return receiver;
+		}
 	}
 	public static class FieldReflect extends MemberReflect<Field>{
 
@@ -488,9 +495,11 @@ public abstract class Reflect {
 		public FieldReflect(Reflect from,Field member, Object object) {
 			super(from,member, object);
 		}
-
 		public FieldReflect(Reflect from,Field member) {
 			super(from,member);
+		}
+		public FieldReflect set(Object value) throws ReflectException{
+			return set(value,true);
 		}
 		public FieldReflect set(Object value,boolean force) throws ReflectException{
 			try{
@@ -555,15 +564,19 @@ public abstract class Reflect {
 			super.release();
 			return this;
 		}
+		public Class<?> fieldType(){
+			return super.value.getType();
+		}
 	}
 	public static class MethodReflect extends MemberReflect<Method>{
-
+		private boolean bind = false;
 		public MethodReflect(Reflect from,Method member) {
 			super(from,member);
 		}
 
 		public MethodReflect(Reflect from,Method member, Object receiver) {
 			super(from,member, receiver);
+			bind = true;
 		}
 		private Object[] arguments = EMPTY_OBJECT_ARRAY;
 		public MethodReflect(Reflect from,Method member, Object receiver,Object[] arguments) {
@@ -571,9 +584,11 @@ public abstract class Reflect {
 			if(arguments != null){
 				this.arguments = arguments;
 			}
+			bind = true;
 		}
 		public MethodReflect bind(Object...arguments){
 			this.arguments = arguments;
+			bind = true;
 			return this;
 		}
 		public Reflect call() throws ReflectException{
@@ -606,7 +621,8 @@ public abstract class Reflect {
 			return callBy(from, super.receiver, arguments);
 		}
 		public int parameterSize(){
-			return arguments==null?0:arguments.length;
+			return super.value.getParameterCount();
+//			return arguments==null?0:arguments.length;
 		}
 		public ClassReflect parameterTypeAt(int index){
 			Class<?>[] types = super.off().getParameterTypes();
@@ -637,6 +653,12 @@ public abstract class Reflect {
 		public MethodReflect release() {
 			super.release();
 			return this;
+		}
+		public Object[] getArguments() {
+			return arguments;
+		}
+		public boolean isBind() {
+			return bind;
 		}
 	}
 	
@@ -763,7 +785,7 @@ public abstract class Reflect {
 			return annotations;
 		}
 		@Override
-		public <T extends Annotation> T getAnotation(Class<T> annotationClass) {
+		public <T extends Annotation> T getAnnotation(Class<T> annotationClass) {
 			throw new UnsupportedOperationException();
 		}
 		
@@ -827,7 +849,11 @@ public abstract class Reflect {
 		public ObjectReflect(Reflect from,Object object) {
 			super(from);
 			this.object = object;
-			super.type = object.getClass();
+			if(object != null){
+				super.type = object.getClass();
+			}else{
+				super.type = NULL.class;
+			}
 		}
 		@SuppressWarnings("unchecked")
 		@Override
@@ -967,11 +993,6 @@ public abstract class Reflect {
 		}
 
 		@Override
-		public Map<String, FieldReflect> fields() {
-			return super.fields();
-		}
-
-		@Override
 		public Map<String, Reflect> fieldValues() {
 			return super.fieldValues();
 		}
@@ -1047,6 +1068,9 @@ public abstract class Reflect {
 		public EnumReflect(Class<T> enumType) {
 			super(nullReflect());
 			this.enumType = enumType;
+			if(!enumType.isEnum()){
+				throw new ReflectException(enumType.getName()+" is not enum type");
+			}
 			for(Field field: enumType.getDeclaredFields()){
 				if(field.getName().contains("$VALUES")){
 					valuesField = field;
@@ -1058,6 +1082,15 @@ public abstract class Reflect {
 				breakFinal(valuesField);
 			}catch (Exception e) {
 				e.printStackTrace();
+			}
+		}
+		@SuppressWarnings("unchecked")
+		public T[] values(){
+			try{
+				T[] values = (T[]) valuesField.get(enumType);
+				return values;
+			}catch(Exception e){
+				return (T[])new Object[0];
 			}
 		}
 		/**
@@ -1256,9 +1289,6 @@ public abstract class Reflect {
 	}
 	
 	private static ObjectReflect on(Reflect from,Object object) throws ReflectException{
-		if(object == null){
-			throw new ReflectException("Illegal argument:null");
-		}
 		return new ObjectReflect(from,object);
 	}
 	public static ObjectReflect on(Object object) throws ReflectException{
@@ -1448,11 +1478,15 @@ public abstract class Reflect {
 	 * @version 1.0
 	 * @date 2015-3-30
 	 * @param name
-	 * @return
-	 * @throws ReflectException
+	 * @return null if field not exist
 	 */
-	public FieldReflect field(String name) throws ReflectException{
-		return new FieldReflect(this,field0(name),off());
+	public FieldReflect field(String name) {
+		Field field = field0(name);
+		if(field != null){
+			return new FieldReflect(this,field,off());
+		}else{
+			return null;
+		}
 	}
 	private Field field0(String name) throws ReflectException{
 		Class<?> type = type();
@@ -1465,18 +1499,18 @@ public abstract class Reflect {
 				}catch(NoSuchFieldException ignore){}
 				type = type.getSuperclass();
 			}
-			throw new ReflectException(e);
+			return null;
 		}
 	}
 	/**
-	 * 所有字段
+	 * @param modifier
 	 * @author y1j2x34
 	 * @version 1.0
 	 * @date 2015-3-30
-	 * @return
+	 * @return 
 	 */
-	public Map<String,FieldReflect> fields(){
-		return fields0();
+	public Map<String,FieldReflect> fields(int modifiers){
+		return fields0(modifiers);
 	}
 	/**
 	 * 所有字段对应的值
@@ -1486,22 +1520,43 @@ public abstract class Reflect {
 	 * @return
 	 */
 	public Map<String,Reflect> fieldValues(){
-		Map<String,FieldReflect> fields = fields0();
+		Map<String,FieldReflect> fields = fields0(0);
 		Map<String,Reflect> fieldValues = new HashMap<String, Reflect>(fields.size());
 		for(String name:fields.keySet()){
 			fieldValues.put(name, fields.get(name).get());
 		}
 		return fieldValues;
 	}
-	private Map<String,FieldReflect> fields0(){
+	
+	public static final int STATIC =  Modifier.STATIC;
+	public static final int PUBLIC =  Modifier.PUBLIC;
+	public static final int PRIVATE =  Modifier.PRIVATE;
+	public static final int PROTECTED =  Modifier.PROTECTED;
+	public static final int FINAL =  Modifier.FINAL;
+	public static final int TRANSIENT =  Modifier.TRANSIENT;
+	public static final int VOLATILE =  Modifier.VOLATILE;
+	
+	public static final int NOT_STATIC  	= ~	STATIC;
+	public static final int NOT_PUBLIC 		= ~	PUBLIC;
+	public static final int NOT_PRIVATE 	= ~	PRIVATE;
+	public static final int NOT_PROTECTED 	= ~	PROTECTED;
+	public static final int NOT_FINAL 		= ~	FINAL;
+	public static final int NOT_TRANSIENT 	= ~	TRANSIENT;
+	public static final int NOT_VOLATILE 	= ~	VOLATILE;
+	
+	private static final boolean matchModifiers(int a,int b){
+		return (a & b) == a || (a | b) == a;
+	}
+	
+	private Map<String,FieldReflect> fields0(int modifiers){
 		Map<String,FieldReflect> fields = new HashMap<String, FieldReflect>();
 		Class<?> type = type();
 		while(type != null){
 			Field[] fs = type.getDeclaredFields();
 			for(int i=0;i<fs.length;i++){
-				//如果是ClassReflect，则只取静态字段
-				//如果不是ClassReflect，则不取静态字段
-				if(!isClass() ^ Modifier.isStatic(fs[i].getModifiers())){
+				int fmod = fs[i].getModifiers();
+				System.out.println(fs[i].getName()+": " + fmod + ", " + modifiers);
+				if(matchModifiers(fmod,modifiers)){
 					String name = fs[i].getName();
 					if(!fields.containsKey(name)){
 						fields.put(name, field(name));
