@@ -930,7 +930,7 @@ public abstract class Reflect {
 
 	@Override
 	public String toString() {
-		return new StringBuilder().append(getClass()).append('<').append(off()).append('>').toString();
+		return new StringBuilder().append(getClass()).append('<').append(String.valueOf(off())).append('>').toString();
 	}
 
 	public static class AnnotatedReflect<A extends AnnotatedElement> extends Reflect {
