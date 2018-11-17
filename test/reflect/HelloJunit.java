@@ -1,7 +1,3 @@
-/**
- * 姓名：陆梦琳
- *下午10:05:33
- */
 package reflect;
 
 import static org.hamcrest.CoreMatchers.*;
