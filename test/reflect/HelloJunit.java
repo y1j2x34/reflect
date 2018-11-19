@@ -1,7 +1,4 @@
-/**
- * 姓名：陆梦琳
- *下午10:05:33
- */
+
 package reflect;
 
 import static org.hamcrest.CoreMatchers.*;
@@ -21,7 +18,7 @@ public class HelloJunit {
 	}
 	@Test
 	public void helloworld(){
-		String expectedName = "陆梦琳";
+		String expectedName = "lookaaa";
 		String actual = Reflect.on(Person.class)
 		.create(expectedName, 0)
 		.call("getName").off();
