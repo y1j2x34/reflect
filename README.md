@@ -108,7 +108,7 @@ mr.bind("讲鸟语").callBy(new Person("小明"));//output: 小明说：讲鸟�
 ```java
 Reflect.on(Person.class).method("say","讲鸟语").callBy(new Person("小明"));
 ```
-##BatchReflect示例
+## BatchReflect示例
 ```java
 List<Person> persons = new ArrayList<Person>();
 for(int i=0;i<50;i++){
