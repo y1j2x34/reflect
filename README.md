@@ -1,7 +1,7 @@
 # reflect
 Java反射工具
 
-##准备一个Person类
+## 准备一个Person类
 ```java
 class Person{
 	private String name;
@@ -31,7 +31,7 @@ class Person{
 }
 ```
 ***
-##基本使用方法
+## 基本使用方法
 ### 1. 创建一个Reflect
 ```java
 //包装类
@@ -87,12 +87,12 @@ op.field("name").get().off();//returns "data"
 Map<String,Reflect> values = op.fieldValues();
 ```
 ***
-##链式调用
+## 链式调用
 ```java
 Reflect.on(Person.class).create().method("say",String.class).call((Object)"你好世界");//output: 你好世界
 ```
 ***
-##参数绑定
+## 参数绑定
 ### 1. 创建时绑定
 ```java
 Method sayMethod = Person.class.getDeclaredMethod("say",String.class);
@@ -125,7 +125,7 @@ for(Reflect r:reflect.call("getName")){
 //...
 ```
 ***  
-##EnumReflect
+## EnumReflect
 动态创建枚举
 ```java
 public enum Sex{
